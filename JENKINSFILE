@@ -1,19 +1,18 @@
 pipeline {
-    agent any
-
+     agent { label 'windows' }
      stages {
         stage('Get Code') {
             steps {
                 // Obtener código del repo
-                git 'https://github.com/anieto-unir/helloworld.git'
+                git 'https://github.com/VIRIATO80/unir_cp1a.git'
             }
         }
-    
+        
         stage('Build') {
            steps {
               echo 'Eyyy, esto es Python. No hay que compilar nada!!!'
 	          echo WORKSPACE
-              bat 'dir'
+              bat 'ls'
            }
         }
         
@@ -26,27 +25,25 @@ pipeline {
                     '''
                }
             }
-        }   
-
-
+        }
+        
         stage('Rest') {
             steps {
                 bat '''
                     set FLASK_APP=app\\api.py
                     set FLASK_ENV=development
                     start flask run
-                    start java -jar C:\\Unir\\Ejercicios\\wiremock\\wiremock-jre8-standalone-2.28.0.jar --port 9090 --root-dir C:\\Unir\\Ejercicios\\wiremock
+                    start java -jar C:\\icarus\\UNIR-DEVOPS\\repos\\unir_cp1a\\wiremock\\wiremock-standalone-3.3.1.jar  --port 9090 --root-dir C:\\icarus\\UNIR-DEVOPS\\repos\\unir_cp1a\\wiremock
                     set PYTHONPATH=%WORKSPACE%
                     pytest --junitxml=result-rest.xml test\\rest
                 '''
             }    
         }
-
+        
         stage('Results') {
             steps {
                 junit 'result*.xml' 
             }
-        }
-     
+        }        
     }
 }

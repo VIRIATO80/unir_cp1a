@@ -1,0 +1,78 @@
+pipeline {
+    agent { label 'windows' }
+    stages {
+        stage('Get Code') {
+            steps {
+                // Obtener código del repo
+                git 'https://github.com/VIRIATO80/unir_cp1a.git'
+                stash name: 'code', includes: '**/*'
+                echo 'HOSTNAME: ' + bat(script: 'hostname', returnStatus: true)
+                echo 'WHOAMI: ' + bat(script: 'whoami', returnStatus: true)
+                echo WORKSPACE
+            }
+        }
+
+        stage('Build') {
+            agent { label 'python3' }
+            steps {
+                unstash 'code'
+                echo 'Eyyy, esto es Python. No hay que compilar nada!!!'
+                bat 'dir'
+                stash name: 'build_result', includes: '**/*'
+                echo 'HOSTNAME: ' + bat(script: 'hostname', returnStatus: true)
+                echo 'WHOAMI: ' + bat(script: 'whoami', returnStatus: true)
+                echo WORKSPACE                
+            }
+        }
+
+        stage('Tests') {
+            parallel {
+                stage('Unit Tests') {
+                    agent { label 'junit' }
+                    steps {
+                        unstash 'code'
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                            bat 'set PYTHONPATH=%WORKSPACE% && pytest --junitxml=result-unit.xml test\\unit'
+                        }
+                        stash name: 'unit_test_result', includes: '**/*'
+                        echo 'HOSTNAME: ' + bat(script: 'hostname', returnStatus: true)
+                        echo 'WHOAMI: ' + bat(script: 'whoami', returnStatus: true)
+                        echo WORKSPACE
+                    }
+                }
+                stage('Rest Tests') {
+                    agent { label 'wiremock' }
+                    steps {
+                        unstash 'code'
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                            bat '''
+                                set FLASK_APP=app\\api.py
+                                set FLASK_ENV=development
+                                start flask run
+                                start java -jar C:\\icarus\\UNIR-DEVOPS\\repos\\unir_cp1a\\wiremock\\wiremock-standalone-3.3.1.jar  --port 9090 --root-dir C:\\icarus\\UNIR-DEVOPS\\repos\\unir_cp1a\\wiremock
+                                set PYTHONPATH=%WORKSPACE%
+                                pytest --junitxml=result-rest.xml test\\rest
+                            '''
+                        }
+                        stash name: 'rest_test_result', includes: '**/*'
+                        echo 'HOSTNAME: ' + bat(script: 'hostname', returnStatus: true)
+                        echo 'WHOAMI: ' + bat(script: 'whoami', returnStatus: true)
+                        echo WORKSPACE
+                    }
+                }
+            }
+        }
+
+        stage('Results') {
+            agent { label 'windows' }
+            steps {
+                unstash 'build_result'
+                unstash 'unit_test_result'
+                junit 'result*.xml'
+                echo 'HOSTNAME: ' + bat(script: 'hostname', returnStatus: true)
+                echo 'WHOAMI: ' + bat(script: 'whoami', returnStatus: true)
+                echo WORKSPACE
+            }
+        }
+    }
+}

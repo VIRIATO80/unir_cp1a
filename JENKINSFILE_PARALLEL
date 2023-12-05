@@ -1,0 +1,51 @@
+pipeline {
+     agent { label 'windows' }
+     stages {
+        stage('Get Code') {
+            steps {
+                // Obtener código del repo
+                git 'https://github.com/VIRIATO80/unir_cp1a.git'
+            }
+        }
+        
+        stage('Build') {
+           steps {
+              echo 'Eyyy, esto es Python. No hay que compilar nada!!!'
+	          echo WORKSPACE
+              bat 'ls'
+           }
+        }
+        
+        stage('Tests') {
+        	parallel {
+        		stage('Unit Tests') {
+        			steps {
+        				catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+        					bat 'set PYTHONPATH=%WORKSPACE% && pytest --junitxml=result-unit.xml test\\unit'
+        				}
+        			}
+        		}
+        		stage('Rest Tests') {
+        			steps {
+        				catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+        					bat '''
+        						set FLASK_APP=app\\api.py
+        						set FLASK_ENV=development
+        						start flask run
+        						start java -jar C:\\icarus\\UNIR-DEVOPS\\repos\\unir_cp1a\\wiremock\\wiremock-standalone-3.3.1.jar  --port 9090 --root-dir C:\\icarus\\UNIR-DEVOPS\\repos\\unir_cp1a\\wiremock
+        						set PYTHONPATH=%WORKSPACE%
+        						pytest --junitxml=result-rest.xml test\\rest
+        					'''
+        				}
+        			}
+        		}
+        	}
+        }
+        
+        stage('Results') {
+            steps {
+                junit 'result*.xml' 
+            }
+        }        
+    }
+}

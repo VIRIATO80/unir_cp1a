@@ -62,5 +62,11 @@ class TestCalculate(unittest.TestCase):
         self.assertEqual(0, self.calc.substract(0, 0))
         self.assertRaises(TypeError, self.calc.substract, "0", 0)
         
+    def test_divide_method_raises_error_division_by_zero(self):
+        with self.assertRaises(TypeError) as context:
+            self.calc.divide(5, 0)
+        self.assertEqual(str(context.exception), "Division by zero is not possible")
+   
+        
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

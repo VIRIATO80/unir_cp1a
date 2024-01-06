@@ -8,12 +8,18 @@ pipeline {
             }
         }
         
-        stage('Build') {
-           steps {
-              echo 'Eyyy, esto es Python. No hay que compilar nada!!!'
-	          echo WORKSPACE
-              bat 'ls'
-           }
+        stage('Static') {
+            steps {
+                bat '''
+                    flake8 --exit-zero --format=pylint app > flake8.out
+                '''
+                recordIssues tools: 
+                    [flake8(name: 'Flake8', pattern: 'flake8.out')],
+                    qualityGates: [
+                        [threshold: 10, type: 'TOTAL', unstable: true], 
+                        [threshold: 12, type: 'TOTAL', unstable: false]
+                    ]
+            }
         }
         
         stage('Unit') {
@@ -23,27 +29,47 @@ pipeline {
                         set PYTHONPATH=%WORKSPACE%
                         pytest --junitxml=result-unit.xml test\\unit
                     '''
+                    junit 'result*.xml'
                }
             }
         }
         
-        stage('Rest') {
+        stage('Cobertura') {
+            steps {
+                bat '''
+                    coverage run --branch --source=app --omit=app\\__init__.py,app\\api.py -m pytest test\\unit
+                    coverage xml
+                '''
+                cobertura coberturaReportFile: 'coverage.xml', conditionalCoverageTargets: '100,83,80', lineCoverageTargets: '95,90,95', failUnstable: false
+            }
+        }
+        
+        stage('Security') {
+            steps {
+                bat '''
+                    bandit --exit-zero -r . -f custom -o bandit.out --severity-level medium --msg-template "{abspath}:{line}: [{test_id} {msg}]"
+                '''
+                recordIssues tools:
+                    [
+                    pyLint(name: 'Bandit', pattern: 'bandit.out')],
+                    qualityGates: [
+                        [threshold: 1, type: 'TOTAL', unstable: true], 
+                        [threshold: 2, type: 'TOTAL', unstable: false]
+                    ]
+            }
+        }
+
+        stage('Performance') {
             steps {
                 bat '''
                     set FLASK_APP=app\\api.py
                     set FLASK_ENV=development
-                    start flask run
-                    start java -jar C:\\icarus\\UNIR-DEVOPS\\repos\\unir_cp1a\\wiremock\\wiremock-standalone-3.3.1.jar  --port 9090 --root-dir C:\\icarus\\UNIR-DEVOPS\\repos\\unir_cp1a\\wiremock
-                    set PYTHONPATH=%WORKSPACE%
-                    pytest --junitxml=result-rest.xml test\\rest
+                    start flask run                
+                    C:\\apache-jmeter-5.5\\bin\\jmeter -n -t test\\jmeter\\flask.jmx -f -l flask.jlt
                 '''
-            }    
+                perfReport sourceDataFiles: 'flask.jlt'
+            }
         }
         
-        stage('Results') {
-            steps {
-                junit 'result*.xml' 
-            }
-        }        
     }
 }
